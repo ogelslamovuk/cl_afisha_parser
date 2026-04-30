@@ -1,0 +1,27 @@
+source:
+  start_url: "https://bycard.by/objects/minsk/2"
+  max_pages: 20
+  headless: true
+  timeout_seconds: 45
+
+output:
+  current_file: "output/current/go2.json"
+  report_file: "output/current/report.json"
+  archive_dir: "output/archive"
+
+validation:
+  min_shows: 100
+
+telegram:
+  enabled: true
+  bot_token_env: "TELEGRAM_BOT_TOKEN"
+  recipients:
+    - name: "channel"
+      chat_id: ""
+      enabled: true
+    - name: "group"
+      chat_id: ""
+      enabled: true
+  notify_on_success: true
+  notify_on_error: true
+  notify_on_validation_failed: true
