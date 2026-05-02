@@ -14,13 +14,10 @@ validation:
 
 telegram:
   enabled: true
-  bot_token_env: "TELEGRAM_BOT_TOKEN"
+  bot_token_env: "8206146313:AAETnwDLP1ftVAZEvGMoZDQrrUfuqJEAgnc"
   recipients:
-    - name: "channel"
-      chat_id: ""
-      enabled: true
-    - name: "group"
-      chat_id: ""
+    - name: "Reports_cinemalab"
+      chat_id: "-1003700117006"
       enabled: true
   notify_on_success: true
   notify_on_error: true
