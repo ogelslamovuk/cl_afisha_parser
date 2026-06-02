@@ -4,10 +4,36 @@ from src.normalizer import normalize_events
 from src.writer import validate_shows, write_outputs
 from src.logger import log_info, log_error
 from src.telegram_notify import send_telegram_summary
+from src.publisher_github import publish_to_github_pages
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import time
 import traceback
+
+
+APP_TZ = timezone(timedelta(hours=3))
+
+
+def _format_meta_time(value):
+    if not value:
+        dt = datetime.now(APP_TZ)
+    else:
+        dt = datetime.fromisoformat(value).astimezone(APP_TZ)
+    return dt.replace(tzinfo=None, microsecond=0).isoformat()
+
+
+def _add_payload_meta(payload, report):
+    payload["meta"] = {
+        "updatedAt": _format_meta_time(report.get("finishedAt")),
+        "timezone": "UTC+3",
+        "durationSec": report.get("durationSeconds"),
+        "showsCount": report.get("showsCount"),
+        "pagesScanned": report.get("pagesScanned"),
+        "source": report.get("sourceUrl"),
+        "status": report.get("status"),
+        "validation": report.get("validation", {}),
+    }
+    return payload
 
 
 def main() -> int:
@@ -24,6 +50,7 @@ def main() -> int:
         "outputFile": None,
         "archiveFile": None,
         "validation": {},
+        "githubPages": {},
         "telegram": {},
         "errors": [],
     }
@@ -43,11 +70,6 @@ def main() -> int:
 
         is_valid, validation_info = validate_shows(shows, config)
         report["validation"] = validation_info
-
-        write_result = write_outputs(normalized, report, is_valid, config)
-        report["outputFile"] = write_result.get("output_file")
-        report["archiveFile"] = write_result.get("archive_file")
-
         report["status"] = "success" if is_valid else "validation_failed"
 
     except ConfigError as exc:
@@ -61,13 +83,20 @@ def main() -> int:
     report["finishedAt"] = finished_at.isoformat()
     report["durationSeconds"] = round(time.time() - start_ts, 2)
 
-    tg_result = send_telegram_summary(report, config if 'config' in locals() else None)
+    if "normalized" in locals() and "config" in locals():
+        normalized = _add_payload_meta(normalized, report)
+        write_result = write_outputs(normalized, report, report["status"] == "success", config)
+        report["outputFile"] = write_result.get("output_file")
+        report["archiveFile"] = write_result.get("archive_file")
+        report["githubPages"] = publish_to_github_pages(normalized, report, config)
+
+    tg_result = send_telegram_summary(report, config if "config" in locals() else None)
     report["telegram"] = tg_result
 
-    # rewrite report to include telegram status
+    # rewrite report to include GitHub publication and Telegram statuses
     from src.writer import write_report_only
 
-    write_report_only(report, (config if 'config' in locals() else None))
+    write_report_only(report, (config if "config" in locals() else None))
 
     log_info("done", f"duration={report['durationSeconds']}s")
     return 0 if report["status"] in ("success", "validation_failed") else 1

@@ -14,3 +14,6 @@ __pycache__/
 # local files
 LATER.txt
 output/
+output/
+logs/
+
