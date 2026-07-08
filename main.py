@@ -3,7 +3,7 @@ from src.bycard_parser import fetch_screening_events
 from src.normalizer import normalize_events
 from src.writer import validate_shows, write_outputs
 from src.logger import log_info, log_error
-from src.telegram_notify import send_telegram_start, send_telegram_summary
+from src.telegram_notify import send_telegram_summary
 from src.publisher_github import publish_to_github_pages
 
 from datetime import datetime, timezone, timedelta
@@ -60,7 +60,6 @@ def main() -> int:
     try:
         config = load_config("config.yaml")
         report["sourceUrl"] = config["source"]["start_url"]
-        report["telegramStart"] = send_telegram_start(config)
 
         raw_events, pages_scanned = fetch_screening_events(config)
         report["pagesScanned"] = pages_scanned

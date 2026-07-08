@@ -64,7 +64,15 @@ def _send_text(text, config):
 
         for chunk in _split_message(text):
             try:
-                rr = requests.post(url, json={"chat_id": chat_id, "text": chunk}, timeout=20)
+                rr = requests.post(
+                    url,
+                    json={
+                        "chat_id": chat_id,
+                        "text": chunk,
+                        "disable_web_page_preview": True,
+                    },
+                    timeout=20,
+                )
                 if rr.ok:
                     res["sent"] += 1
                 else:
@@ -81,17 +89,13 @@ def _send_text(text, config):
 def _msg_success(report):
     github = report.get("githubPages") or {}
     publish_status = "опубликован на GitHub Pages" if github.get("published") else "не опубликован"
-    commit = github.get("commit")
-    commit_line = f"\ncommit: {commit}" if commit else ""
     return (
         "Парсинг BYCard для афиши выполнен успешно.\n"
         "Ошибок нет.\n"
         f"Событий: {report.get('showsCount', 0)}\n"
         f"Страниц просканировано: {report.get('pagesScanned', 0)}\n"
-        f"Длительность: {report.get('durationSeconds', 0)} сек.\n"
-        f"JSON: {publish_status}\n"
+        f"JSON: {publish_status}.\n"
         f"URL: {github.get('url', 'https://ogelslamovuk.github.io/cl_afisha_parser/data/go2.json')}"
-        f"{commit_line}"
     )
 
 
@@ -112,10 +116,6 @@ def _msg_error(report):
         f"Шаг: {err.get('step')}\n"
         f"Ошибка: {err.get('error')}"
     )
-
-
-def send_telegram_start(config):
-    return _send_text("Запущен парсинг BYCard для афиши.", config)
 
 
 def send_telegram_summary(report, config):
