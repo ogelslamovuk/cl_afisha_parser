@@ -14,7 +14,7 @@ validation:
 
 telegram:
   enabled: true
-  bot_token_env: "8206146313:AAETnwDLP1ftVAZEvGMoZDQrrUfuqJEAgnc"
+  bot_token: "8665430127:AAE8IAscCGGPBhHwCPODSz-MhVLQcwo7ZSc"
   recipients:
     - name: "Reports_cinemalab"
       chat_id: "-1003700117006"
