@@ -2,12 +2,15 @@ import json
 import os
 import shutil
 import subprocess
+import time
 from pathlib import Path
 
 from src.logger import log_info
 
 
 DEFAULT_PUBLIC_URL = "https://ogelslamovuk.github.io/cl_afisha_parser/data/go2.json"
+DEFAULT_REPO = "ogelslamovuk/cl_afisha_parser"
+DEFAULT_WORKFLOW = "Deploy GitHub Pages"
 
 
 def _dump_json(path, data):
@@ -28,6 +31,69 @@ def _run_git(args, timeout=60):
     )
 
 
+def _run_gh(args, timeout=30):
+    return subprocess.run(
+        ["gh", *args],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=timeout,
+        check=False,
+    )
+
+
+def _wait_for_pages_deploy(commit_sha, cfg):
+    if shutil.which("gh") is None:
+        return {"ok": False, "error": "gh executable not found; cannot verify Pages deploy"}
+
+    repo = cfg.get("repo", DEFAULT_REPO)
+    workflow = cfg.get("workflow", DEFAULT_WORKFLOW)
+    timeout_seconds = int(cfg.get("deploy_timeout_seconds", 1200))
+    poll_seconds = int(cfg.get("deploy_poll_seconds", 10))
+    deadline = time.time() + timeout_seconds
+    last_state = "not started"
+
+    while time.time() < deadline:
+        run = _run_gh(
+            [
+                "run",
+                "list",
+                "--repo",
+                repo,
+                "--workflow",
+                workflow,
+                "--commit",
+                commit_sha,
+                "--limit",
+                "1",
+                "--json",
+                "databaseId,status,conclusion,url",
+            ]
+        )
+        if run.returncode != 0:
+            last_state = run.stderr.strip() or run.stdout.strip() or "gh run list failed"
+        else:
+            try:
+                runs = json.loads(run.stdout or "[]")
+            except json.JSONDecodeError as exc:
+                last_state = f"failed to parse gh run list output: {exc}"
+            else:
+                if runs:
+                    item = runs[0]
+                    status = item.get("status")
+                    conclusion = item.get("conclusion")
+                    url = item.get("url")
+                    last_state = f"status={status} conclusion={conclusion}"
+                    if status == "completed":
+                        if conclusion == "success":
+                            return {"ok": True, "run_url": url}
+                        return {"ok": False, "error": f"Pages workflow concluded {conclusion}", "run_url": url}
+
+        time.sleep(poll_seconds)
+
+    return {"ok": False, "error": f"Timed out waiting for Pages workflow ({last_state})"}
+
+
 def publish_to_github_pages(payload, report, config):
     cfg = (config or {}).get("github_pages", {})
     enabled = cfg.get("enabled", True)
@@ -40,6 +106,8 @@ def publish_to_github_pages(payload, report, config):
         "errors": [],
         "file": None,
         "commit": None,
+        "deploy_checked": False,
+        "deploy_run_url": None,
         "url": cfg.get("public_url", DEFAULT_PUBLIC_URL),
     }
 
@@ -91,6 +159,8 @@ def publish_to_github_pages(payload, report, config):
         rev = _run_git(["rev-parse", "--short", "HEAD"])
         if rev.returncode == 0:
             result["commit"] = rev.stdout.strip()
+        full_rev = _run_git(["rev-parse", "HEAD"])
+        commit_sha = full_rev.stdout.strip() if full_rev.returncode == 0 else result["commit"]
 
         push = _run_git(["push", "origin", "master"], timeout=180)
         if push.returncode != 0:
@@ -98,8 +168,17 @@ def publish_to_github_pages(payload, report, config):
             return result
 
         result["pushed"] = True
-        result["published"] = True
         log_info("publish", f"pushed {rel_file}")
+
+        if cfg.get("wait_for_deploy", True):
+            result["deploy_checked"] = True
+            deploy = _wait_for_pages_deploy(commit_sha, cfg)
+            result["deploy_run_url"] = deploy.get("run_url")
+            if not deploy.get("ok"):
+                result["errors"].append(deploy.get("error", "Pages workflow failed"))
+                return result
+
+        result["published"] = True
         return result
     except Exception as exc:
         result["errors"].append(str(exc))

@@ -89,6 +89,10 @@ def main() -> int:
         report["outputFile"] = write_result.get("output_file")
         report["archiveFile"] = write_result.get("archive_file")
         report["githubPages"] = publish_to_github_pages(normalized, report, config)
+        if report["status"] == "success" and report["githubPages"].get("enabled") and not report["githubPages"].get("published"):
+            error_text = "; ".join(report["githubPages"].get("errors", [])) or "GitHub Pages deploy was not confirmed"
+            report["status"] = "error"
+            report["errors"].append({"step": "github_pages", "error": error_text})
 
     tg_result = send_telegram_summary(report, config if "config" in locals() else None)
     report["telegram"] = tg_result
