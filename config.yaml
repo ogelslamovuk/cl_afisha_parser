@@ -1,8 +1,17 @@
 source:
   start_url: "https://bycard.by/objects/minsk/2"
+  api_url: "https://api.24afisha.by/api/v3/pages/objects"
+  city_id: 3
+  object_type_id: 2
+  per_page: 18
   max_pages: 20
-  headless: true
   timeout_seconds: 45
+  connect_timeout_seconds: 10
+  retries: 2
+  retry_delay_seconds: 1
+  max_response_bytes: 31457280
+  fallback_ips:
+    - "178.172.148.3"
 
 output:
   current_file: "output/current/go2.json"
@@ -11,10 +20,12 @@ output:
 
 validation:
   min_shows: 100
+  min_theatres: 15
+  min_distinct_dates: 3
 
 telegram:
   enabled: true
-  bot_token: "8665430127:AAE8IAscCGGPBhHwCPODSz-MhVLQcwo7ZSc"
+  bot_token_env: "TELEGRAM_BOT_TOKEN"
   recipients:
     - name: "Reports_cinemalab"
       chat_id: "-1003700117006"

@@ -11,6 +11,8 @@ from src.logger import log_info
 DEFAULT_PUBLIC_URL = "https://ogelslamovuk.github.io/cl_afisha_parser/data/go2.json"
 DEFAULT_REPO = "ogelslamovuk/cl_afisha_parser"
 DEFAULT_WORKFLOW = "Deploy GitHub Pages"
+DEFAULT_PUBLISHED_FILE = "docs/data/go2.json"
+DEFAULT_BRANCH = "master"
 
 
 def _dump_json(path, data):
@@ -42,14 +44,48 @@ def _run_gh(args, timeout=30):
     )
 
 
+def _deploy_job_status(run_id, repo, cfg):
+    """Read Pages deploy job status even when GitHub leaves the workflow in progress."""
+    job_name = str(cfg.get("deploy_job_name", "deploy")).casefold()
+    result = _run_gh(
+        [
+            "run",
+            "view",
+            str(run_id),
+            "--repo",
+            repo,
+            "--json",
+            "jobs",
+        ]
+    )
+    if result.returncode != 0:
+        return None
+
+    try:
+        jobs = json.loads(result.stdout or "{}").get("jobs", [])
+    except (AttributeError, json.JSONDecodeError):
+        return None
+
+    for job in jobs:
+        name = str(job.get("name", "")).casefold()
+        if job_name in name and job.get("status") == "completed":
+            conclusion = job.get("conclusion")
+            return {
+                "ok": conclusion == "success",
+                "conclusion": conclusion,
+                "name": job.get("name"),
+            }
+    return None
+
+
 def _wait_for_pages_deploy(commit_sha, cfg):
     if shutil.which("gh") is None:
         return {"ok": False, "error": "gh executable not found; cannot verify Pages deploy"}
 
     repo = cfg.get("repo", DEFAULT_REPO)
     workflow = cfg.get("workflow", DEFAULT_WORKFLOW)
-    timeout_seconds = int(cfg.get("deploy_timeout_seconds", 1200))
-    poll_seconds = int(cfg.get("deploy_poll_seconds", 10))
+    timeout_seconds = max(1, int(cfg.get("deploy_timeout_seconds", 1200)))
+    poll_seconds = max(1, int(cfg.get("deploy_poll_seconds", 10)))
     deadline = time.time() + timeout_seconds
     last_state = "not started"
 
@@ -88,6 +124,16 @@ def _wait_for_pages_deploy(commit_sha, cfg):
                         if conclusion == "success":
                             return {"ok": True, "run_url": url}
                         return {"ok": False, "error": f"Pages workflow concluded {conclusion}", "run_url": url}
+                    if item.get("databaseId"):
+                        deploy_job = _deploy_job_status(item["databaseId"], repo, cfg)
+                        if deploy_job:
+                            if deploy_job["ok"]:
+                                return {"ok": True, "run_url": url, "confirmed_by": "deploy_job"}
+                            return {
+                                "ok": False,
+                                "error": f"Pages deploy job concluded {deploy_job['conclusion']}",
+                                "run_url": url,
+                            }
 
         time.sleep(poll_seconds)
 
@@ -121,7 +167,7 @@ def publish_to_github_pages(payload, report, config):
         return result
 
     root = Path.cwd()
-    output_file = root / "docs" / "data" / "go2.json"
+    output_file = root / cfg.get("file", DEFAULT_PUBLISHED_FILE)
 
     try:
         _dump_json(output_file, payload)
@@ -150,7 +196,8 @@ def publish_to_github_pages(payload, report, config):
             log_info("publish", "no changes")
             return result
 
-        commit = _run_git(["commit", "-m", "Update published go2.json"], timeout=120)
+        commit_message = cfg.get("commit_message", "Update published go2.json")
+        commit = _run_git(["commit", "-m", commit_message], timeout=120)
         if commit.returncode != 0:
             result["errors"].append(commit.stderr.strip() or commit.stdout.strip() or "git commit failed")
             return result
@@ -162,7 +209,8 @@ def publish_to_github_pages(payload, report, config):
         full_rev = _run_git(["rev-parse", "HEAD"])
         commit_sha = full_rev.stdout.strip() if full_rev.returncode == 0 else result["commit"]
 
-        push = _run_git(["push", "origin", "master"], timeout=180)
+        branch = cfg.get("branch", DEFAULT_BRANCH)
+        push = _run_git(["push", "origin", branch], timeout=180)
         if push.returncode != 0:
             result["errors"].append(push.stderr.strip() or push.stdout.strip() or "git push failed")
             return result

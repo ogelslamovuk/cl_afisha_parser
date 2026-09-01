@@ -14,6 +14,10 @@ import traceback
 APP_TZ = timezone(timedelta(hours=3))
 
 
+def _exception_message(exc):
+    return str(exc).strip() or exc.__class__.__name__
+
+
 def _format_meta_time(value):
     if not value:
         dt = datetime.now(APP_TZ)
@@ -39,6 +43,8 @@ def _add_payload_meta(payload, report):
 def main() -> int:
     start_ts = time.time()
     started_at = datetime.now(timezone.utc)
+    config = None
+    normalized = None
     report = {
         "status": "error",
         "startedAt": started_at.isoformat(),
@@ -73,17 +79,19 @@ def main() -> int:
         report["status"] = "success" if is_valid else "validation_failed"
 
     except ConfigError as exc:
-        report["errors"].append({"step": "config", "error": str(exc)})
-        log_error("config", str(exc))
+        error = _exception_message(exc)
+        report["errors"].append({"step": "config", "error": error})
+        log_error("config", error)
     except Exception as exc:
-        report["errors"].append({"step": "runtime", "error": str(exc), "trace": traceback.format_exc()})
-        log_error("runtime", str(exc))
+        error = _exception_message(exc)
+        report["errors"].append({"step": "runtime", "error": error, "trace": traceback.format_exc()})
+        log_error("runtime", error)
 
     finished_at = datetime.now(timezone.utc)
     report["finishedAt"] = finished_at.isoformat()
     report["durationSeconds"] = round(time.time() - start_ts, 2)
 
-    if "normalized" in locals() and "config" in locals():
+    if normalized is not None and config is not None:
         normalized = _add_payload_meta(normalized, report)
         write_result = write_outputs(normalized, report, report["status"] == "success", config)
         report["outputFile"] = write_result.get("output_file")
@@ -94,13 +102,13 @@ def main() -> int:
             report["status"] = "error"
             report["errors"].append({"step": "github_pages", "error": error_text})
 
-    tg_result = send_telegram_summary(report, config if "config" in locals() else None)
+    tg_result = send_telegram_summary(report, config)
     report["telegram"] = tg_result
 
     # rewrite report to include GitHub publication and Telegram statuses
     from src.writer import write_report_only
 
-    write_report_only(report, (config if "config" in locals() else None))
+    write_report_only(report, config)
 
     log_info("done", f"duration={report['durationSeconds']}s")
     return 0 if report["status"] in ("success", "validation_failed") else 1

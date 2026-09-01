@@ -10,10 +10,11 @@ __pycache__/
 
 # env
 .env
+config.local.yaml
 
 # local files
 LATER.txt
 output/
-output/
 logs/
+__pycache__/
 
