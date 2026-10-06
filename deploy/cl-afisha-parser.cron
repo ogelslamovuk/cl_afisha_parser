@@ -1,0 +1,7 @@
+CRON_TZ=Europe/Minsk
+0 9 * * * cinema /usr/bin/flock -n /srv/data/cl_afisha_parser/run.lock /usr/bin/docker compose -f /srv/apps/cl_afisha_parser/docker-compose.yml run --rm afisha-parser >> /srv/data/cl_afisha_parser/logs/cron.log 2>&1
+0 12 * * * cinema /usr/bin/flock -n /srv/data/cl_afisha_parser/run.lock /usr/bin/docker compose -f /srv/apps/cl_afisha_parser/docker-compose.yml run --rm afisha-parser >> /srv/data/cl_afisha_parser/logs/cron.log 2>&1
+0 15 * * * cinema /usr/bin/flock -n /srv/data/cl_afisha_parser/run.lock /usr/bin/docker compose -f /srv/apps/cl_afisha_parser/docker-compose.yml run --rm afisha-parser >> /srv/data/cl_afisha_parser/logs/cron.log 2>&1
+40 18 * * * cinema /usr/bin/flock -n /srv/data/cl_afisha_parser/run.lock /usr/bin/docker compose -f /srv/apps/cl_afisha_parser/docker-compose.yml run --rm afisha-parser >> /srv/data/cl_afisha_parser/logs/cron.log 2>&1
+0 21 * * * cinema /usr/bin/flock -n /srv/data/cl_afisha_parser/run.lock /usr/bin/docker compose -f /srv/apps/cl_afisha_parser/docker-compose.yml run --rm afisha-parser >> /srv/data/cl_afisha_parser/logs/cron.log 2>&1
+59 23 * * * cinema /usr/bin/flock -n /srv/data/cl_afisha_parser/run.lock /usr/bin/docker compose -f /srv/apps/cl_afisha_parser/docker-compose.yml run --rm afisha-parser >> /srv/data/cl_afisha_parser/logs/cron.log 2>&1
