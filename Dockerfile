@@ -3,7 +3,7 @@ FROM python:3.13-slim
 WORKDIR /app
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git gh util-linux \
+    && apt-get install -y --no-install-recommends git gh openssh-client util-linux \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --create-home --uid 1000 --shell /usr/sbin/nologin app \
     && mkdir -p /home/app/.ssh \
