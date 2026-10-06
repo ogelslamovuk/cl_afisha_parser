@@ -1,0 +1,21 @@
+name: cl-afisha-parser
+
+services:
+  afisha-parser:
+    build: .
+    image: cl-afisha-parser:local
+    user: "1000:1000"
+    working_dir: /app
+    init: true
+    restart: "no"
+    env_file:
+      - /etc/cl-afisha-parser.env
+    environment:
+      GIT_SSH_COMMAND: ssh -i /home/app/.ssh/id_ed25519 -o IdentitiesOnly=yes -o UserKnownHostsFile=/home/app/.ssh/known_hosts
+    volumes:
+      - ./:/app
+      - /srv/data/cl_afisha_parser/output:/app/output
+      - /srv/data/cl_afisha_parser/logs:/app/logs
+      - /srv/data/cl_afisha_parser/config.local.yaml:/app/config.local.yaml:ro
+      - /srv/data/cl_afisha_parser/github_deploy_key:/home/app/.ssh/id_ed25519:ro
+      - /srv/data/cl_afisha_parser/github_known_hosts:/home/app/.ssh/known_hosts:ro

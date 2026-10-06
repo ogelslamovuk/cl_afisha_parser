@@ -1,0 +1,11 @@
+.git
+.github
+.idea
+.venv
+__pycache__
+*.pyc
+config.local.yaml
+logs
+output
+referencego2.json
+LATER.txt
