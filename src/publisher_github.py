@@ -5,6 +5,8 @@ import subprocess
 import time
 from pathlib import Path
 
+import requests
+
 from src.logger import log_info
 
 
@@ -78,10 +80,31 @@ def _deploy_job_status(run_id, repo, cfg):
     return None
 
 
-def _wait_for_pages_deploy(commit_sha, cfg):
-    if shutil.which("gh") is None:
-        return {"ok": False, "error": "gh executable not found; cannot verify Pages deploy"}
+def _public_workflow_status(commit_sha, repo, workflow):
+    """Read public workflow status without placing a GitHub API token on VPS."""
+    try:
+        response = requests.get(
+            f"https://api.github.com/repos/{repo}/actions/runs",
+            params={"head_sha": commit_sha, "per_page": 20},
+            headers={"Accept": "application/vnd.github+json", "User-Agent": "cl-afisha-parser"},
+            timeout=30,
+        )
+        response.raise_for_status()
+        runs = response.json().get("workflow_runs", [])
+    except (requests.RequestException, ValueError, AttributeError) as exc:
+        return {"error": f"public GitHub Actions check failed: {exc}"}
 
+    for run in runs:
+        if run.get("name") == workflow:
+            return {
+                "status": run.get("status"),
+                "conclusion": run.get("conclusion"),
+                "url": run.get("html_url"),
+            }
+    return {"status": "not_started"}
+
+
+def _wait_for_pages_deploy(commit_sha, cfg):
     repo = cfg.get("repo", DEFAULT_REPO)
     workflow = cfg.get("workflow", DEFAULT_WORKFLOW)
     timeout_seconds = max(1, int(cfg.get("deploy_timeout_seconds", 1200)))
@@ -90,25 +113,25 @@ def _wait_for_pages_deploy(commit_sha, cfg):
     last_state = "not started"
 
     while time.time() < deadline:
-        run = _run_gh(
-            [
-                "run",
-                "list",
-                "--repo",
-                repo,
-                "--workflow",
-                workflow,
-                "--commit",
-                commit_sha,
-                "--limit",
-                "1",
-                "--json",
-                "databaseId,status,conclusion,url",
-            ]
-        )
-        if run.returncode != 0:
-            last_state = run.stderr.strip() or run.stdout.strip() or "gh run list failed"
-        else:
+        run = None
+        if shutil.which("gh") is not None:
+            run = _run_gh(
+                [
+                    "run",
+                    "list",
+                    "--repo",
+                    repo,
+                    "--workflow",
+                    workflow,
+                    "--commit",
+                    commit_sha,
+                    "--limit",
+                    "1",
+                    "--json",
+                    "databaseId,status,conclusion,url",
+                ]
+            )
+        if run is not None and run.returncode == 0:
             try:
                 runs = json.loads(run.stdout or "[]")
             except json.JSONDecodeError as exc:
@@ -134,6 +157,19 @@ def _wait_for_pages_deploy(commit_sha, cfg):
                                 "error": f"Pages deploy job concluded {deploy_job['conclusion']}",
                                 "run_url": url,
                             }
+        else:
+            public_run = _public_workflow_status(commit_sha, repo, workflow)
+            if public_run.get("error"):
+                last_state = public_run["error"]
+            else:
+                status = public_run.get("status")
+                conclusion = public_run.get("conclusion")
+                url = public_run.get("url")
+                last_state = f"public status={status} conclusion={conclusion}"
+                if status == "completed":
+                    if conclusion == "success":
+                        return {"ok": True, "run_url": url, "confirmed_by": "public_api"}
+                    return {"ok": False, "error": f"Pages workflow concluded {conclusion}", "run_url": url}
 
         time.sleep(poll_seconds)
 

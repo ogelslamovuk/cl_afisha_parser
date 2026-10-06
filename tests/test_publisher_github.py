@@ -16,6 +16,21 @@ def _result(payload):
 
 
 class PagesDeployWaitTests(unittest.TestCase):
+    @patch("src.publisher_github.time.sleep")
+    @patch("src.publisher_github._public_workflow_status")
+    @patch("src.publisher_github.shutil.which", return_value=None)
+    def test_uses_public_api_when_vps_has_no_github_token(self, _which, public_status, _sleep):
+        public_status.return_value = {
+            "status": "completed",
+            "conclusion": "success",
+            "url": "https://example.test/run/999",
+        }
+
+        result = _wait_for_pages_deploy("public", {"deploy_timeout_seconds": 5})
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["confirmed_by"], "public_api")
+
     @patch("src.publisher_github.shutil.which", return_value="gh")
     @patch("src.publisher_github._run_gh")
     def test_accepts_successful_deploy_job_when_workflow_status_is_stuck(self, run_gh, _which):
